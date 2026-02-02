@@ -5,14 +5,12 @@ import (
 	"strings"
 )
 
-// Константы конвертации
-const (
-	usdToEur = 0.85 // 1 USD = 0.85 EUR
-	usdToRub = 75.5 // 1 USD = 75.5 RUB
-)
-
-// Курс EUR в RUB через USD
-const eurToRub = usdToRub / usdToEur
+// Map с курсами валют относительно USD
+var exchangeRates = map[string]float64{
+	"USD": 1.0,
+	"EUR": 0.85,
+	"RUB": 75.5,
+}
 
 // Доступные валюты
 var availableCurrencies = []string{"USD", "EUR", "RUB"}
@@ -29,12 +27,8 @@ func printAvailableCurrencies() {
 // Функция для проверки корректности валюты
 func isValidCurrency(currency string) bool {
 	currency = strings.ToUpper(currency)
-	for _, validCurrency := range availableCurrencies {
-		if currency == validCurrency {
-			return true
-		}
-	}
-	return false
+	_, exists := exchangeRates[currency]
+	return exists
 }
 
 // Функция для ввода валюты с проверкой
@@ -75,53 +69,72 @@ func inputAmount(prompt string) float64 {
 	}
 }
 
-// Функция для расчета конвертации
+// Функция для расчета конвертации с использованием map
 func convertCurrency(amount float64, fromCurrency, toCurrency string) (float64, error) {
 	// Если валюты одинаковые, возвращаем ту же сумму
 	if fromCurrency == toCurrency {
 		return amount, nil
 	}
 
-	// Конвертируем сначала в USD как промежуточную валюту
-	var amountInUSD float64
+	// Получаем курсы валют
+	fromRate, fromExists := exchangeRates[fromCurrency]
+	toRate, toExists := exchangeRates[toCurrency]
 
-	// Конвертируем исходную валюту в USD
-	switch fromCurrency {
-	case "USD":
-		amountInUSD = amount
-	case "EUR":
-		amountInUSD = amount / usdToEur
-	case "RUB":
-		amountInUSD = amount / usdToRub
-	default:
+	if !fromExists {
 		return 0, fmt.Errorf("неподдерживаемая валюта: %s", fromCurrency)
 	}
 
-	// Конвертируем из USD в целевую валюту
-	var result float64
-	switch toCurrency {
-	case "USD":
-		result = amountInUSD
-	case "EUR":
-		result = amountInUSD * usdToEur
-	case "RUB":
-		result = amountInUSD * usdToRub
-	default:
+	if !toExists {
 		return 0, fmt.Errorf("неподдерживаемая валюта: %s", toCurrency)
 	}
 
+	// Конвертируем через USD как базовую валюту
+	amountInUSD := amount / fromRate
+	result := amountInUSD * toRate
+
 	return result, nil
+}
+
+// Функция для получения курса конвертации между двумя валютами
+func getExchangeRate(fromCurrency, toCurrency string) (float64, error) {
+	if fromCurrency == toCurrency {
+		return 1.0, nil
+	}
+
+	fromRate, fromExists := exchangeRates[fromCurrency]
+	toRate, toExists := exchangeRates[toCurrency]
+
+	if !fromExists || !toExists {
+		return 0, fmt.Errorf("неподдерживаемая валюта")
+	}
+
+	return toRate / fromRate, nil
 }
 
 func main() {
 	fmt.Println("=== КОНВЕРТЕР ВАЛЮТ ===")
 	fmt.Println()
 
-	// Выводим курсы
-	fmt.Println("Текущие курсы конвертации:")
-	fmt.Printf("1 USD = %.2f EUR\n", usdToEur)
-	fmt.Printf("1 USD = %.2f RUB\n", usdToRub)
-	fmt.Printf("1 EUR = %.2f RUB\n\n", eurToRub)
+	// Выводим курсы из map
+	fmt.Println("Текущие курсы конвертации (относительно USD):")
+	for currency, rate := range exchangeRates {
+		if currency != "USD" {
+			fmt.Printf("1 USD = %.2f %s\n", rate, currency)
+		}
+	}
+
+	// Рассчитываем и выводим кросс-курсы
+	fmt.Println("\nКросс-курсы:")
+	currencies := []string{"USD", "EUR", "RUB"}
+	for i := 0; i < len(currencies); i++ {
+		for j := 0; j < len(currencies); j++ {
+			if i != j {
+				rate, _ := getExchangeRate(currencies[i], currencies[j])
+				fmt.Printf("1 %s = %.4f %s\n", currencies[i], rate, currencies[j])
+			}
+		}
+	}
+	fmt.Println()
 
 	// Шаг 1: Ввод исходной валюты
 	fmt.Println("ШАГ 1: Ввод исходной валюты")
@@ -143,56 +156,21 @@ func main() {
 	// Шаг 4: Конвертация и вывод результата
 	fmt.Println("ШАГ 4: Результат конвертации")
 
-	// Вычисляем результат с помощью if/switch
-	var result float64
-	var err error
-
-	if fromCurrency == toCurrency {
-		result = amount
-	} else {
-		// Конвертируем сначала в USD
-		var amountInUSD float64
-
-		switch fromCurrency {
-		case "USD":
-			amountInUSD = amount
-		case "EUR":
-			amountInUSD = amount / usdToEur
-		case "RUB":
-			amountInUSD = amount / usdToRub
-		}
-
-		// Конвертируем из USD в целевую валюту
-		switch toCurrency {
-		case "USD":
-			result = amountInUSD
-		case "EUR":
-			result = amountInUSD * usdToEur
-		case "RUB":
-			result = amountInUSD * usdToRub
-		}
-	}
+	// Вычисляем результат с использованием map
+	result, err := convertCurrency(amount, fromCurrency, toCurrency)
 
 	// Выводим результат
 	if err == nil {
 		fmt.Printf("\n✅ Конвертация успешно завершена!\n")
 		fmt.Printf("%.2f %s = %.2f %s\n", amount, fromCurrency, result, toCurrency)
 
-		// Дополнительная информация о курсе
-		fmt.Println("\nИспользованные курсы:")
-		if fromCurrency == "USD" && toCurrency == "EUR" {
-			fmt.Printf("1 USD = %.2f EUR\n", usdToEur)
-		} else if fromCurrency == "USD" && toCurrency == "RUB" {
-			fmt.Printf("1 USD = %.2f RUB\n", usdToRub)
-		} else if fromCurrency == "EUR" && toCurrency == "RUB" {
-			fmt.Printf("1 EUR = %.2f RUB\n", eurToRub)
-		} else if fromCurrency == "EUR" && toCurrency == "USD" {
-			fmt.Printf("1 EUR = %.2f USD\n", 1/usdToEur)
-		} else if fromCurrency == "RUB" && toCurrency == "USD" {
-			fmt.Printf("1 RUB = %.4f USD\n", 1/usdToRub)
-		} else if fromCurrency == "RUB" && toCurrency == "EUR" {
-			fmt.Printf("1 RUB = %.4f EUR\n", 1/eurToRub)
-		}
+		// Получаем и выводим использованный курс
+		rate, _ := getExchangeRate(fromCurrency, toCurrency)
+		fmt.Printf("\nИспользованный курс: 1 %s = %.4f %s\n", fromCurrency, rate, toCurrency)
+
+		// Выводим обратный курс
+		reverseRate, _ := getExchangeRate(toCurrency, fromCurrency)
+		fmt.Printf("Обратный курс: 1 %s = %.4f %s\n", toCurrency, reverseRate, fromCurrency)
 	} else {
 		fmt.Printf("Ошибка при конвертации: %v\n", err)
 	}
@@ -201,17 +179,40 @@ func main() {
 	fmt.Println("\n" + strings.Repeat("=", 40))
 	fmt.Println("Примеры других конвертаций:")
 
-	// Пример 1: USD -> EUR
-	exampleAmount := 100.0
-	exampleResult, _ := convertCurrency(exampleAmount, "USD", "EUR")
-	fmt.Printf("%.2f USD = %.2f EUR\n", exampleAmount, exampleResult)
+	// Примеры из map
+	examples := []struct {
+		amount       float64
+		fromCurrency string
+		toCurrency   string
+	}{
+		{100.0, "USD", "EUR"},
+		{100.0, "EUR", "RUB"},
+		{1000.0, "RUB", "USD"},
+		{50.0, "EUR", "USD"},
+		{5000.0, "RUB", "EUR"},
+	}
 
-	// Пример 2: EUR -> RUB
-	exampleResult, _ = convertCurrency(exampleAmount, "EUR", "RUB")
-	fmt.Printf("%.2f EUR = %.2f RUB\n", exampleAmount, exampleResult)
+	for _, example := range examples {
+		exampleResult, err := convertCurrency(example.amount, example.fromCurrency, example.toCurrency)
+		if err == nil {
+			rate, _ := getExchangeRate(example.fromCurrency, example.toCurrency)
+			fmt.Printf("%.2f %s = %.2f %s (курс: 1 %s = %.4f %s)\n",
+				example.amount, example.fromCurrency,
+				exampleResult, example.toCurrency,
+				example.fromCurrency, rate, example.toCurrency)
+		}
+	}
 
-	// Пример 3: RUB -> USD
-	exampleAmount = 1000.0
-	exampleResult, _ = convertCurrency(exampleAmount, "RUB", "USD")
-	fmt.Printf("%.2f RUB = %.2f USD\n", exampleAmount, exampleResult)
+	// Показываем все доступные курсы
+	fmt.Println("\n" + strings.Repeat("=", 40))
+	fmt.Println("Все доступные курсы конвертации:")
+
+	for _, fromCurr := range availableCurrencies {
+		for _, toCurr := range availableCurrencies {
+			if fromCurr != toCurr {
+				rate, _ := getExchangeRate(fromCurr, toCurr)
+				fmt.Printf("1 %s = %.4f %s\n", fromCurr, rate, toCurr)
+			}
+		}
+	}
 }
