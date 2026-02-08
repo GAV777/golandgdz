@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"golandgdz/pkg/storage"
+	"golandgdz/storage"
 	"log"
 	"os"
 )
